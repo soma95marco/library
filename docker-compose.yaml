@@ -1,0 +1,35 @@
+services:
+
+  db:
+    image: mariadb:11.3.2
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?missing in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?missing in .env}
+      MYSQL_USER: ${MYSQL_USER:?missing in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?missing in .env}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3.13.0-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?missing in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?missing in .env}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  db-data:

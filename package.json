@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/api.ts",
     "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
