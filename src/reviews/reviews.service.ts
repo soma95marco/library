@@ -17,7 +17,6 @@ const loadReview = async (id: string): Promise<Review> => {
 const searchCatalog = (query: string): Promise<Book[]> => searchBooks(query);
 
 const createReview = async (input: CreateReview, publish: PublishReview): Promise<Review> => {
-  // the book is checked here and not in the worker so a wrong id fails the request itself
   const book = await getBook(input.bookId);
   if (!book) throw new AppError(404, "book not found");
 
