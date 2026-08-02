@@ -9,7 +9,9 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 
-export const reviews = mysqlTable("reviews", {
+// the book columns are denormalised into the review instead of living in their own table: a
+// book is only ever read through the review that references it, so a join would buy nothing
+const reviews = mysqlTable("reviews", {
   id: char("id", { length: 36 }).primaryKey(),
   bookId: varchar("book_id", { length: 32 }).notNull(),
   content: text("content").notNull(),
@@ -24,5 +26,7 @@ export const reviews = mysqlTable("reviews", {
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
-export type Review = typeof reviews.$inferSelect;
-export type NewReview = typeof reviews.$inferInsert;
+type Review = typeof reviews.$inferSelect;
+type NewReview = typeof reviews.$inferInsert;
+
+export { type NewReview, type Review, reviews };
