@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import type { Review } from "../db/schema.ts";
+import type { ReviewWithBook } from "./reviews.repository.ts";
 import { createReviewSchema, searchQuerySchema, updateReviewSchema } from "./reviews.schemas.ts";
 import type { PublishReview } from "./reviews.service.ts";
 import * as service from "./reviews.service.ts";
@@ -7,19 +7,19 @@ import * as service from "./reviews.service.ts";
 type RoutesOptions = { publish: PublishReview };
 type IdParam = { Params: { id: string } };
 
-const reviewResponse = (review: Review) => ({
+const reviewResponse = ({ review, book }: ReviewWithBook) => ({
   id: review.id,
   status: review.status,
   bookId: review.bookId,
   score: review.score,
-  content: review.content,
+  review: review.content,
   book:
-    review.status === "ready"
+    review.status === "ready" && book
       ? {
-          title: review.bookTitle,
-          authors: review.bookAuthors,
-          coverUrl: review.bookCoverUrl,
-          metadata: review.bookMetadata,
+          title: book.title,
+          authors: book.authors,
+          coverUrl: book.coverUrl,
+          metadata: book.metadata,
         }
       : null,
   failureReason: review.failureReason,
@@ -35,8 +35,8 @@ const reviewsRoutes: FastifyPluginAsync<RoutesOptions> = async (app, { publish }
   });
 
   app.post("/review", async (request, reply) => {
-    const input = createReviewSchema.parse(request.body);
-    const review = await service.createReview(input, publish);
+    const { id, review: content, score } = createReviewSchema.parse(request.body);
+    const { review } = await service.createReview({ bookId: id, content, score }, publish);
     return reply
       .status(202)
       .header("Location", `/review/${review.id}`)
@@ -44,17 +44,17 @@ const reviewsRoutes: FastifyPluginAsync<RoutesOptions> = async (app, { publish }
   });
 
   app.get<IdParam>("/review/:id", async (request, reply) => {
-    const review = await service.getReview(request.params.id);
+    const found = await service.getReview(request.params.id);
     // still queued: there is no book data to hand back, so the client is told to come back
-    if (review.status === "pending") {
-      return reply.status(202).send({ id: review.id, status: review.status });
+    if (found.review.status === "pending") {
+      return reply.status(202).send({ id: found.review.id, status: found.review.status });
     }
-    return reviewResponse(review);
+    return reviewResponse(found);
   });
 
   app.put<IdParam>("/review/:id", async (request) => {
-    const input = updateReviewSchema.parse(request.body);
-    return reviewResponse(await service.updateReview(request.params.id, input));
+    const { review: content, score } = updateReviewSchema.parse(request.body);
+    return reviewResponse(await service.updateReview(request.params.id, { content, score }));
   });
 
   app.delete<IdParam>("/review/:id", async (request, reply) => {

@@ -11,6 +11,7 @@ import type { PublishReview } from "./reviews/reviews.service.ts";
 const buildApp = (publish: PublishReview, logger = true): FastifyInstance => {
   const app = Fastify({ logger });
   app.setErrorHandler(errorHandler);
+  app.get("/health", async () => ({ status: "ok" }));
   app.register(docsRoutes);
   app.register(reviewsRoutes, { publish });
   return app;
