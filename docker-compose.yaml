@@ -1,0 +1,91 @@
+# shared by api and worker, kept out of both so neither service owns the other's configuration
+x-app-env: &app-env
+  PORT: 3000
+  DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+  RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+  GUTENDEX_URL: ${GUTENDEX_URL:-https://gutendex.com}
+  BOOK_MAX_AGE_DAYS: ${BOOK_MAX_AGE_DAYS:-30}
+
+services:
+
+  db:
+    image: mariadb:11.3.2
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?missing in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?missing in .env}
+      MYSQL_USER: ${MYSQL_USER:?missing in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?missing in .env}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3.13.0-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?missing in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?missing in .env}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    command: npm run db:migrate
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    # node runs as pid 1 so it gets the sigterm docker sends on stop; an npm script in between
+    # would swallow it and the graceful shutdown would never run
+    command: node dist/api.js
+    # both processes die on a broken dependency rather than limping along, so bringing them back
+    # is the orchestrator's job instead of a retry loop in the code
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - "3001:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  worker:
+    build: .
+    command: node dist/worker.js
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db-data:

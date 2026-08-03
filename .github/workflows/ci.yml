@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mariadb:11.3.2
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: bookreviews
+          MYSQL_USER: user
+          MYSQL_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: mysql://user:password@127.0.0.1:3306/bookreviews
+      RABBITMQ_URL: amqp://user:password@127.0.0.1:5672
+      GUTENDEX_URL: https://gutendex.com
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run db:migrate
+      - run: npm test
+      # the compiler does not catch a broken dockerfile, and that is what actually ships
+      - run: docker build --tag book-review-service .
