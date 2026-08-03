@@ -6,6 +6,7 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   RABBITMQ_URL: z.url(),
   GUTENDEX_URL: z.url(),
+  BOOK_MAX_AGE_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);

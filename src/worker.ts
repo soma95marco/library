@@ -14,8 +14,11 @@ await channel.prefetch(5);
 await channel.consume(QUEUE, async (message) => {
   if (!message) return;
 
-  const { reviewId } = JSON.parse(message.content.toString()) as { reviewId: string };
+  // parsed inside the try: a hand written message that is not json must still be nacked, or it
+  // would sit unacked and eat one of the prefetch slots until the channel closes
+  let reviewId: string | undefined;
   try {
+    reviewId = (JSON.parse(message.content.toString()) as { reviewId: string }).reviewId;
     const outcome = await enrichReview(reviewId);
     channel.ack(message);
     logger.info({ reviewId, outcome }, "review processed");
@@ -24,7 +27,14 @@ await channel.consume(QUEUE, async (message) => {
       { err: error, reviewId },
       "enrichment failed, message sent to the dead letter queue",
     );
-    await markReviewFailed(reviewId, error instanceof Error ? error.message : "unknown error");
+    // the database being down is one of the reasons we are here, so recording the failure can
+    // fail as well, and the nack has to happen either way
+    if (reviewId) {
+      const reason = error instanceof Error ? error.message : "unknown error";
+      await markReviewFailed(reviewId, reason).catch((failure) => {
+        logger.error({ err: failure, reviewId }, "could not mark the review as failed");
+      });
+    }
     // no requeue: gutendex being down would make the same message spin forever
     channel.nack(message, false, false);
   }

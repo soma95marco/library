@@ -1,13 +1,20 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { type NewReview, type Review, reviews } from "../db/schema.ts";
+import { books, type NewReview, type Review, reviews, type StoredBook } from "../db/schema.ts";
+
+type ReviewWithBook = { review: Review; book: StoredBook | null };
 
 const insertReview = async (review: NewReview): Promise<void> => {
   await db.insert(reviews).values(review);
 };
 
-const findReview = async (id: string): Promise<Review | null> => {
-  const [row] = await db.select().from(reviews).where(eq(reviews.id, id));
+// left join: the book row shows up only once the worker has fetched it
+const findReview = async (id: string): Promise<ReviewWithBook | null> => {
+  const [row] = await db
+    .select({ review: reviews, book: books })
+    .from(reviews)
+    .leftJoin(books, eq(reviews.bookId, books.id))
+    .where(eq(reviews.id, id));
   return row ?? null;
 };
 
@@ -20,4 +27,4 @@ const deleteReview = async (id: string): Promise<number> => {
   return result.affectedRows;
 };
 
-export { deleteReview, findReview, insertReview, updateReview };
+export { deleteReview, findReview, insertReview, type ReviewWithBook, updateReview };

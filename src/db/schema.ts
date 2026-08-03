@@ -9,18 +9,23 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 
-// the book columns are denormalised into the review instead of living in their own table: a
-// book is only ever read through the review that references it, so a join would buy nothing
+// keyed by the gutendex id, so the same book reviewed a hundred times is fetched and stored once
+const books = mysqlTable("books", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  title: varchar("title", { length: 512 }).notNull(),
+  authors: json("authors").$type<string[]>().notNull(),
+  coverUrl: varchar("cover_url", { length: 1024 }),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+});
+
+// book_id is not a foreign key on purpose: the review is written before the book row exists
 const reviews = mysqlTable("reviews", {
   id: char("id", { length: 36 }).primaryKey(),
   bookId: varchar("book_id", { length: 32 }).notNull(),
   content: text("content").notNull(),
   score: tinyint("score", { unsigned: true }).notNull(),
   status: mysqlEnum("status", ["pending", "ready", "failed"]).notNull().default("pending"),
-  bookTitle: varchar("book_title", { length: 512 }),
-  bookAuthors: json("book_authors").$type<string[]>(),
-  bookCoverUrl: varchar("book_cover_url", { length: 1024 }),
-  bookMetadata: json("book_metadata").$type<Record<string, unknown>>(),
   failureReason: varchar("failure_reason", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
@@ -28,5 +33,6 @@ const reviews = mysqlTable("reviews", {
 
 type Review = typeof reviews.$inferSelect;
 type NewReview = typeof reviews.$inferInsert;
+type StoredBook = typeof books.$inferSelect;
 
-export { type NewReview, type Review, reviews };
+export { books, type NewReview, type Review, reviews, type StoredBook };
