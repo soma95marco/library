@@ -110,17 +110,17 @@ produce the same answer. Anything else may be temporary, so the message is prese
 `reviews` holds a uuid, the Gutendex `book_id`, the text, the score, a status of `pending`,
 `ready` or `failed`, and a `failure_reason`.
 
-`failure_reason` is filled only when the status is `failed`, and it is not a closed set. One value
-is written on purpose:
+`failure_reason` is filled only when the status is `failed`, and it is a closed set of phrases we
+write ourselves. Raw error messages are never stored there, since a driver error would carry the
+query and its parameters, and this column is handed back to the client.
 
-- `book <id> is no longer available` — Gutendex answered `404`, the message was acknowledged
-- `fetch failed` — Gutendex was unreachable
-- `The operation was aborted due to timeout` — it did not answer within ten seconds
-- `gutendex lookup failed with 503` — it answered, with an error
-- a driver message when the database was the problem, or `unknown error` for anything that was
-  not an `Error`
-
-All of these leave the message in the dead letter queue.
+| reason | meaning | message |
+|---|---|---|
+| `book <id> is no longer available` | Gutendex answered `404` | acknowledged |
+| `gutendex did not answer in time` | the ten second timeout expired | dead lettered |
+| `gutendex could not be reached` | the connection failed | dead lettered |
+| `gutendex lookup failed with <status>` | it answered with an error | dead lettered |
+| `enrichment failed` | anything else, the details are in the logs | dead lettered |
 
 `books` holds one row per Gutendex book, keyed by its id, with a `fetched_at` timestamp that makes
 the copy expire. The same book reviewed a hundred times is fetched and stored once.

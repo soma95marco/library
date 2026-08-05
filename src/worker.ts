@@ -2,7 +2,7 @@ import process from "node:process";
 import { pino } from "pino";
 import { pool } from "./db/client.ts";
 import { closeQueue, getChannel, QUEUE } from "./queue/connection.ts";
-import { enrichReview, markReviewFailed } from "./reviews/reviews.consumer.ts";
+import { enrichReview, failureReason, markReviewFailed } from "./reviews/reviews.consumer.ts";
 
 const logger = pino();
 
@@ -30,8 +30,7 @@ await channel.consume(QUEUE, async (message) => {
     // the database being down is one of the reasons we are here, so recording the failure can
     // fail as well, and the nack has to happen either way
     if (reviewId) {
-      const reason = error instanceof Error ? error.message : "unknown error";
-      await markReviewFailed(reviewId, reason).catch((failure) => {
+      await markReviewFailed(reviewId, failureReason(error)).catch((failure) => {
         logger.error({ err: failure, reviewId }, "could not mark the review as failed");
       });
     }

@@ -4,6 +4,16 @@ import * as repo from "./reviews.repository.ts";
 
 type Outcome = "ready" | "failed" | "gone";
 
+// a driver error carries the query and its parameters, and failure_reason is handed back to the
+// client, so only reasons we phrase ourselves are stored. the original is logged by the caller.
+const failureReason = (error: unknown): string => {
+  if (!(error instanceof Error)) return "enrichment failed";
+  if (error.name === "TimeoutError") return "gutendex did not answer in time";
+  if (error.message === "fetch failed") return "gutendex could not be reached";
+  if (error.message.startsWith("gutendex ")) return error.message;
+  return "enrichment failed";
+};
+
 const markReviewFailed = async (reviewId: string, reason: string): Promise<void> => {
   // a stack-carrying message would be truncated by the column anyway, better to cut it here
   await repo.updateReview(reviewId, { status: "failed", failureReason: reason.slice(0, 255) });
@@ -30,4 +40,4 @@ const enrichReview = async (reviewId: string): Promise<Outcome> => {
   return "ready";
 };
 
-export { enrichReview, markReviewFailed };
+export { enrichReview, failureReason, markReviewFailed };
